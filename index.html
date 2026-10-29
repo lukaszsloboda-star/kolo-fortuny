@@ -1,0 +1,997 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Koło Fortuny</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: studio-style console — tile rack on the left, the wheel center stage, the board (entries + results log) on the right */
+:root {
+  --bg: #eef1f6;
+  --surface: #ffffff;
+  --surface-2: #e3e8f1;
+  --ink: #141a2e;
+  --muted: #5a6380;
+  --line: #cfd6e4;
+  --accent: #e4572e;
+  --accent-ink: #ffffff;
+  --gold: #f3a712;
+  --rim: #1d2440;
+  --bulb-on: #ffd166;
+  --bulb-off: #4a5378;
+  --drop: #29a19c;
+  --font-display: "Archivo Black", "Arial Black", Impact, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r-sm: 6px;
+  --r-md: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1324; --surface: #171c33; --surface-2: #20274a; --ink: #eef1fa; --muted: #9aa3c4;
+    --line: #2c3460; --accent: #ff6b43; --accent-ink: #160a05; --gold: #ffbe3b; --rim: #070a16;
+    --bulb-on: #ffd166; --bulb-off: #2b3254; --drop: #3fc1bb; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1324; --surface: #171c33; --surface-2: #20274a; --ink: #eef1fa; --muted: #9aa3c4;
+  --line: #2c3460; --accent: #ff6b43; --accent-ink: #160a05; --gold: #ffbe3b; --rim: #070a16;
+  --bulb-on: #ffd166; --bulb-off: #2b3254; --drop: #3fc1bb; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.app {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "head" "stage" "rack" "board";
+}
+@media (min-width: 760px) {
+  .app { grid-template-columns: 260px minmax(0, 1fr); grid-template-areas: "head head" "rack stage" "board board"; }
+}
+@media (min-width: 1180px) {
+  .app { grid-template-columns: 260px minmax(0, 1fr) 330px; grid-template-areas: "head head head" "rack stage board"; }
+}
+
+header.top { grid-area: head; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+header.top h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(28px, 4vw, 40px);
+  letter-spacing: 0.01em;
+  line-height: 1;
+  margin: 0;
+  text-wrap: balance;
+}
+header.top h1 span { color: var(--accent); }
+header.top p { margin: 0; color: var(--muted); max-width: 60ch; }
+
+h2 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin: 0;
+}
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* ---------- Tile rack ---------- */
+.rack { grid-area: rack; align-self: start; }
+@media (min-width: 760px) { .rack { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); max-height: calc(100vh - 32px); overflow: auto; } }
+.group { display: flex; flex-direction: column; gap: 8px; }
+.group + .group { border-top: 1px dashed var(--line); padding-top: 14px; }
+.group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.group-title { font-weight: 700; font-size: 14px; }
+.tiles { display: flex; flex-wrap: wrap; gap: 6px; }
+.tile {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 3px;
+  border-radius: var(--r-sm);
+  padding: 5px 10px 4px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  transition: transform .12s ease, border-color .12s ease;
+}
+.tile:hover { border-color: var(--drop); transform: translateY(-1px); }
+.tile:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--drop); outline-offset: 2px; }
+.tile.is-source { opacity: .4; }
+.tile .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .x {
+  border: 0; background: none; color: var(--muted); font: inherit; font-size: 15px; line-height: 1;
+  padding: 0 0 0 2px; cursor: pointer;
+}
+.tile .x:hover { color: var(--accent); }
+.empty-note { font-size: 13px; color: var(--muted); font-style: italic; }
+
+.linkbtn {
+  border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--drop);
+  cursor: pointer; padding: 2px 0;
+}
+.linkbtn:hover { text-decoration: underline; }
+.linkbtn.danger { color: var(--accent); }
+
+.group-actions { display: flex; align-items: center; gap: 12px; flex: none; }
+.group.is-editing {
+  background: var(--bg);
+  border: 1px solid var(--drop);
+  border-radius: var(--r-sm);
+  padding: 12px;
+  gap: 10px;
+}
+.group.is-editing + .group, .group + .group.is-editing { border-top: 1px solid var(--drop); margin-top: 0; }
+.field-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.edit-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.btn.primary { background: var(--drop); border-color: var(--drop); color: var(--surface); }
+.btn.primary:hover { border-color: var(--ink); }
+.btn.dashed { width: 100%; background: none; border: 1px dashed var(--line); color: var(--muted); }
+.btn.dashed:hover { border-color: var(--drop); color: var(--drop); }
+.rack-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+
+form.new-tile { display: flex; gap: 6px; }
+.set-name, form.new-tile input {
+  flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 7px 10px;
+}
+.set-name { width: 100%; font-weight: 700; }
+.btn {
+  font: inherit; font-weight: 700; font-size: 14px; border-radius: var(--r-sm); cursor: pointer;
+  padding: 7px 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+}
+.btn:hover { border-color: var(--ink); }
+
+/* ---------- Stage ---------- */
+.stage { grid-area: stage; display: flex; flex-direction: column; align-items: center; gap: 18px; min-width: 0; }
+.wheel-wrap {
+  position: relative;
+  width: min(100%, 620px);
+  aspect-ratio: 1;
+  max-width: 100%;
+  border-radius: 50%;
+  transition: box-shadow .15s ease;
+}
+.wheel-wrap.is-over { box-shadow: 0 0 0 6px var(--drop); }
+.wheel-wrap canvas { width: 100%; height: 100%; display: block; }
+.pointer {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 44px;
+  height: 54px;
+  margin-left: -22px;
+  transform-origin: 50% 20%;
+  pointer-events: none;
+  filter: drop-shadow(0 3px 2px rgba(0,0,0,.35));
+}
+.pointer svg { width: 100%; height: 100%; display: block; }
+.pointer.tick { animation: tick .14s ease-out; }
+@keyframes tick { 0% { transform: rotate(0); } 35% { transform: rotate(-16deg); } 100% { transform: rotate(0); } }
+.drop-msg {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+  font-weight: 700; color: var(--drop); opacity: 0; transition: opacity .15s;
+}
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 20px; }
+.spin {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: .04em;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 0;
+  border-bottom: 5px solid color-mix(in srgb, var(--accent) 60%, #000);
+  border-radius: 999px;
+  padding: 12px 40px 9px;
+  cursor: pointer;
+  transition: transform .1s ease;
+}
+.spin:hover:not(:disabled) { transform: translateY(-2px); }
+.spin:active:not(:disabled) { transform: translateY(2px); border-bottom-width: 2px; }
+.spin:disabled { opacity: .45; cursor: not-allowed; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
+.check input { width: 17px; height: 17px; accent-color: var(--accent); }
+
+.result {
+  width: min(100%, 620px);
+  min-height: 84px;
+  border: 2px dashed var(--line);
+  border-radius: var(--r-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 12px 16px;
+  text-align: center;
+}
+.result .idle { color: var(--muted); }
+.result .won { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.result .won small { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+.result .won strong {
+  font-family: var(--font-display); font-weight: 400; font-size: clamp(24px, 4vw, 34px); line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.result.is-win { border-style: solid; border-color: var(--gold); animation: pop .4s ease-out; }
+@keyframes pop { 0% { transform: scale(.94); } 60% { transform: scale(1.03); } 100% { transform: scale(1); } }
+
+/* ---------- Board ---------- */
+.board { grid-area: board; display: grid; gap: 20px; align-content: start; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+@media (min-width: 760px) and (max-width: 1179px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.entries.is-over { border-color: var(--drop); box-shadow: inset 0 0 0 2px var(--drop); }
+.count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.entry-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; min-height: 44px; }
+.entry {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  background: var(--surface-2); border-radius: 999px; padding: 4px 6px 4px 6px; font-size: 14px; font-weight: 500;
+}
+.entry .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.entry .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry button {
+  border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 16px; line-height: 1;
+  padding: 0 4px; border-radius: 50%;
+}
+.entry button:hover { color: var(--accent); }
+.entry.is-hot { outline: 2px solid var(--gold); }
+.drop-empty {
+  width: 100%; border: 2px dashed var(--line); border-radius: var(--r-sm); padding: 14px; text-align: center;
+  color: var(--muted); font-size: 13px;
+}
+.actions { display: flex; gap: 16px; flex-wrap: wrap; }
+
+.history ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.history li {
+  display: grid; grid-template-columns: 22px 12px minmax(0, 1fr); align-items: center; column-gap: 10px; row-gap: 0;
+  padding: 8px 0; border-bottom: 1px solid var(--line);
+}
+.history li:last-child { border-bottom: 0; }
+.history .n { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.history .dot { width: 12px; height: 12px; border-radius: 50%; }
+.history .what { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history time {
+  grid-column: 3; font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.history li.latest .what { color: var(--accent); }
+
+/* ---------- Drag ghost ---------- */
+.ghost {
+  position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; cursor: grabbing;
+  box-shadow: 0 10px 24px rgba(0,0,0,.25); transform-origin: 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pointer.tick, .result.is-win { animation: none; }
+  .tile, .spin, .wheel-wrap { transition: none; }
+}
+</style>
+
+<div class="app">
+  <header class="top">
+    <h1>Koło <span>Fortuny</span></h1>
+    <p>Przeciągnij kafelki na koło albo kliknij je, aby dodać. Zakręć i sprawdź, kto lub co zostało wylosowane.</p>
+  </header>
+
+  <aside class="panel rack" aria-labelledby="rack-title">
+    <div class="panel-head"><h2 id="rack-title">Kafelki</h2></div>
+    <div id="groups"></div>
+    <div class="rack-foot">
+      <button class="btn dashed" type="button" id="new-set">+ Nowy zestaw</button>
+      <button class="linkbtn" type="button" id="reset-sets">Przywróć domyślne zestawy</button>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <div class="wheel-wrap" id="wheel-wrap" data-drop="wheel">
+      <canvas id="wheel" aria-label="Koło fortuny" role="img"></canvas>
+      <div class="pointer" id="pointer" aria-hidden="true">
+        <svg viewBox="0 0 44 54"><path d="M4 4 H40 Q42 4 41 7 L23.6 50 Q22 53 20.4 50 L3 7 Q2 4 4 4 Z" fill="var(--gold)" stroke="var(--rim)" stroke-width="3" stroke-linejoin="round"/><circle cx="22" cy="14" r="5" fill="var(--rim)"/></svg>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="spin" id="spin" type="button">Kręć!</button>
+      <label class="check"><input type="checkbox" id="remove-after"> Usuń wylosowany element z koła</label>
+    </div>
+    <div class="result" id="result" aria-live="polite"><span class="idle">Wynik pojawi się tutaj.</span></div>
+  </main>
+
+  <div class="board">
+    <section class="panel entries" id="entries" data-drop="list" aria-labelledby="entries-title">
+      <div class="panel-head">
+        <h2 id="entries-title">Na kole</h2>
+        <span class="count" id="entry-count">0 pozycji</span>
+      </div>
+      <ul class="entry-list" id="entry-list"></ul>
+      <div class="actions">
+        <button class="linkbtn" type="button" id="shuffle">Wymieszaj</button>
+        <button class="linkbtn danger" type="button" id="clear-entries">Wyczyść koło</button>
+      </div>
+    </section>
+
+    <section class="panel history" aria-labelledby="history-title">
+      <div class="panel-head">
+        <h2 id="history-title">Ostatnie 10 losowań</h2>
+        <button class="linkbtn danger" type="button" id="clear-history">Wyczyść</button>
+      </div>
+      <ol id="history-list"></ol>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const STORE_KEY = 'kolo-fortuny-v1';
+  const HISTORY_MAX = 10;
+  // Segment fills with a readable label color for each.
+  const SEGMENTS = [
+    { fill: '#e4572e', text: '#ffffff' },
+    { fill: '#f3a712', text: '#1b1300' },
+    { fill: '#29a19c', text: '#ffffff' },
+    { fill: '#3f51b5', text: '#ffffff' },
+    { fill: '#b23a6e', text: '#ffffff' },
+    { fill: '#8cc63f', text: '#132000' },
+    { fill: '#3e92cc', text: '#ffffff' },
+    { fill: '#6b4e9b', text: '#ffffff' },
+  ];
+
+  const DEFAULT_GROUPS = [
+    { id: 'team', name: 'Zespół', items: ['Ania', 'Bartek', 'Kasia', 'Michał', 'Ola', 'Piotr', 'Zosia', 'Tomek'] },
+    { id: 'lunch', name: 'Lunch', items: ['Pizza', 'Sushi', 'Ramen', 'Pierogi', 'Burgery', 'Kebab', 'Sałatki'] },
+    { id: 'prizes', name: 'Nagrody', items: ['Kawa', 'Ciastko', 'Wybór muzyki', 'Dzień home office', 'Brak nagrody'] },
+    { id: 'dice', name: 'Liczby', items: ['1', '2', '3', '4', '5', '6'] },
+    { id: 'mine', name: 'Moje kafelki', items: [] },
+  ];
+  const NAME_MAX = 40;
+  const TILE_MAX = 60;
+
+  let uid = 0;
+  const newId = () => 'e' + Date.now().toString(36) + (uid++).toString(36);
+  const defaultGroups = () => DEFAULT_GROUPS.map(g => ({ ...g, items: [...g.items] }));
+  let editing = null;  // id of the set being edited
+
+  const state = {
+    groups: defaultGroups(),
+    entries: ['Ania', 'Bartek', 'Kasia', 'Michał', 'Ola', 'Piotr'].map(label => ({ id: newId(), label })),
+    history: [],
+    removeAfter: false,
+  };
+
+  // ---------- persistence ----------
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data.entries)) state.entries = data.entries.filter(e => e && typeof e.label === 'string').map(e => ({ id: newId(), label: e.label }));
+      if (Array.isArray(data.history)) state.history = data.history.filter(h => h && h.label && h.at).slice(0, HISTORY_MAX);
+      if (Array.isArray(data.groups)) {
+        state.groups = data.groups
+          .filter(g => g && typeof g.name === 'string' && Array.isArray(g.items))
+          .map(g => ({ id: String(g.id || newId()), name: g.name, items: g.items.filter(s => typeof s === 'string') }));
+      } else if (Array.isArray(data.custom)) {
+        // older save: only "Moje kafelki" was editable
+        state.groups.find(g => g.id === 'mine').items = data.custom.filter(s => typeof s === 'string');
+      }
+      state.removeAfter = !!data.removeAfter;
+    } catch (e) { /* storage unavailable: start from defaults */ }
+  }
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        entries: state.entries.map(e => ({ label: e.label })),
+        history: state.history,
+        groups: state.groups,
+        removeAfter: state.removeAfter,
+      }));
+    } catch (e) { /* ignore */ }
+  }
+
+  // ---------- elements ----------
+  const $ = id => document.getElementById(id);
+  const groupsEl = $('groups');
+  const entryList = $('entry-list');
+  const entryCount = $('entry-count');
+  const historyList = $('history-list');
+  const wheelWrap = $('wheel-wrap');
+  const canvas = $('wheel');
+  const ctx = canvas.getContext('2d');
+  const pointerEl = $('pointer');
+  const spinBtn = $('spin');
+  const resultEl = $('result');
+  const removeAfterEl = $('remove-after');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const segColor = (i, n) => {
+    // Avoid two equal neighbours where the last segment meets the first.
+    let k = i % SEGMENTS.length;
+    if (n > 1 && i === n - 1 && k === 0) k = 3;
+    return SEGMENTS[k];
+  };
+
+  function el(tag, cls, text) {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text != null) node.textContent = text;
+    return node;
+  }
+
+  // ---------- render: rack ----------
+  function renderGroups() {
+    groupsEl.replaceChildren();
+    if (!state.groups.length) {
+      groupsEl.append(el('p', 'empty-note', 'Brak zestawów. Utwórz nowy zestaw przyciskiem poniżej.'));
+    }
+    state.groups.forEach(g => {
+      const isEditing = editing === g.id;
+      const wrap = el('div', isEditing ? 'group is-editing' : 'group');
+      wrap.dataset.group = g.id;
+
+      if (isEditing) {
+        const lbl = el('label', 'field-label', 'Nazwa zestawu');
+        lbl.htmlFor = 'set-name-' + g.id;
+        const name = el('input', 'set-name');
+        name.id = 'set-name-' + g.id;
+        name.type = 'text';
+        name.maxLength = NAME_MAX;
+        name.value = g.name;
+        name.dataset.role = 'name';
+        wrap.append(lbl, name);
+      } else {
+        const head = el('div', 'group-head');
+        head.append(el('span', 'group-title', g.name));
+        const actions = el('div', 'group-actions');
+        if (g.items.length) actions.append(actionBtn('linkbtn', 'Dodaj wszystkie', 'add-all'));
+        actions.append(actionBtn('linkbtn', 'Edytuj', 'edit', 'Edytuj zestaw ' + g.name));
+        head.append(actions);
+        wrap.append(head);
+      }
+
+      const tiles = el('div', 'tiles');
+      if (!g.items.length) {
+        tiles.append(el('span', 'empty-note', isEditing ? 'Zestaw jest pusty. Dodaj kafelki poniżej.' : 'Pusty zestaw. Kliknij Edytuj, aby dodać kafelki.'));
+      }
+      g.items.forEach((label, idx) => {
+        const t = el('button', 'tile');
+        t.type = 'button';
+        t.dataset.label = label;
+        t.title = 'Przeciągnij na koło lub kliknij, aby dodać';
+        t.append(el('span', 'label', label));
+        if (isEditing) {
+          const x = el('span', 'x', '×');
+          x.setAttribute('role', 'button');
+          x.setAttribute('aria-label', 'Usuń kafelek ' + label);
+          x.dataset.remove = String(idx);
+          t.append(x);
+        }
+        tiles.append(t);
+      });
+      wrap.append(tiles);
+
+      if (isEditing) {
+        const form = el('form', 'new-tile');
+        form.autocomplete = 'off';
+        const input = el('input');
+        input.id = 'set-add-' + g.id;
+        input.type = 'text';
+        input.maxLength = 300;
+        input.placeholder = 'Nowy kafelek, np. Kasia, Marek';
+        input.setAttribute('aria-label', 'Dodaj kafelek do zestawu ' + g.name);
+        const add = el('button', 'btn', 'Dodaj');
+        add.type = 'submit';
+        form.append(input, add);
+        const foot = el('div', 'edit-foot');
+        foot.append(
+          actionBtn('btn primary', 'Gotowe', 'done'),
+          actionBtn('linkbtn danger', 'Usuń zestaw', 'delete-set'),
+        );
+        wrap.append(form, el('p', 'hint', 'Kilka kafelków naraz rozdziel przecinkami.'), foot);
+      }
+      groupsEl.append(wrap);
+    });
+  }
+
+  function actionBtn(cls, text, action, aria) {
+    const b = el('button', cls, text);
+    b.type = 'button';
+    b.dataset.action = action;
+    if (aria) b.setAttribute('aria-label', aria);
+    return b;
+  }
+
+  function splitLabels(text) {
+    return text.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).map(s => s.slice(0, TILE_MAX));
+  }
+
+  function editSet(id, focus) {
+    editing = id;
+    renderGroups();
+    if (id && focus) {
+      const f = $(focus + id);
+      if (f) { f.focus(); if (focus === 'set-name-') f.select(); }
+    }
+  }
+
+  // ---------- render: entries ----------
+  function renderEntries() {
+    entryList.replaceChildren();
+    const n = state.entries.length;
+    entryCount.textContent = n + ' ' + plural(n, 'pozycja', 'pozycje', 'pozycji');
+    if (!n) {
+      const li = el('li', 'drop-empty', 'Upuść tutaj kafelki z lewej strony.');
+      entryList.append(li);
+    }
+    state.entries.forEach((e, i) => {
+      const li = el('li', 'entry');
+      li.dataset.id = e.id;
+      const dot = el('span', 'dot');
+      dot.style.background = segColor(i, n).fill;
+      const rm = el('button', null, '×');
+      rm.type = 'button';
+      rm.setAttribute('aria-label', 'Usuń ' + e.label + ' z koła');
+      rm.addEventListener('click', () => { if (!spinning) { state.entries.splice(i, 1); changed(); } });
+      li.append(dot, el('span', 'label', e.label), rm);
+      entryList.append(li);
+    });
+    spinBtn.disabled = n < 2 || spinning;
+    spinBtn.title = n < 2 ? 'Dodaj co najmniej 2 pozycje' : '';
+  }
+
+  function plural(n, one, few, many) {
+    if (n === 1) return one;
+    const d = n % 10, dd = n % 100;
+    return (d >= 2 && d <= 4 && (dd < 12 || dd > 14)) ? few : many;
+  }
+
+  // ---------- render: history ----------
+  const dateFmt = new Intl.DateTimeFormat('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  function renderHistory() {
+    historyList.replaceChildren();
+    $('clear-history').hidden = !state.history.length;
+    if (!state.history.length) {
+      historyList.append(el('li', 'empty-note', 'Brak losowań. Zakręć kołem, a wynik zapisze się tutaj razem z datą.'));
+      historyList.firstChild.style.display = 'block';
+      return;
+    }
+    state.history.forEach((h, i) => {
+      const li = el('li', i === 0 ? 'latest' : null);
+      const dot = el('span', 'dot');
+      dot.style.background = h.color || 'var(--muted)';
+      const t = el('time', null, dateFmt.format(new Date(h.at)));
+      t.dateTime = h.at;
+      li.append(el('span', 'n', String(i + 1)), dot, el('span', 'what', h.label), t);
+      li.querySelector('.what').title = h.label;
+      historyList.append(li);
+    });
+  }
+
+  // ---------- wheel drawing ----------
+  let rotation = 0;           // radians
+  let bulbPhase = 0;
+  let flashUntil = 0;
+  let size = 0, dpr = 1;
+  let tokens = {};
+
+  function readTokens() {
+    const cs = getComputedStyle(document.documentElement);
+    const get = n => cs.getPropertyValue(n).trim();
+    tokens = {
+      rim: get('--rim'), on: get('--bulb-on'), off: get('--bulb-off'), surface: get('--surface'),
+      muted: get('--muted'), gold: get('--gold'), accent: get('--accent'), body: get('--font-body'), display: get('--font-display'),
+    };
+  }
+
+  function resize() {
+    const rect = wheelWrap.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    size = Math.max(200, Math.round(rect.width));
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    draw();
+  }
+
+  function fitText(text, maxW) {
+    if (ctx.measureText(text).width <= maxW) return text;
+    let s = text;
+    while (s.length > 1 && ctx.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+    return s + '…';
+  }
+
+  function draw() {
+    const n = state.entries.length;
+    const c = size / 2;
+    const rimW = size * 0.065;
+    const R = c - rimW - 2;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+
+    // rim
+    ctx.beginPath();
+    ctx.arc(c, c, c - 2, 0, Math.PI * 2);
+    ctx.fillStyle = tokens.rim;
+    ctx.fill();
+
+    // bulbs
+    const bulbs = 28;
+    const flashing = performance.now() < flashUntil;
+    for (let i = 0; i < bulbs; i++) {
+      const a = (i / bulbs) * Math.PI * 2;
+      const on = flashing ? Math.floor(performance.now() / 160) % 2 === 0 : (i + bulbPhase) % 2 === 0;
+      ctx.beginPath();
+      ctx.arc(c + Math.cos(a) * (R + rimW / 2), c + Math.sin(a) * (R + rimW / 2), rimW * 0.2, 0, Math.PI * 2);
+      ctx.fillStyle = on ? tokens.on : tokens.off;
+      ctx.fill();
+    }
+
+    if (!n) {
+      ctx.beginPath();
+      ctx.arc(c, c, R, 0, Math.PI * 2);
+      ctx.fillStyle = tokens.surface;
+      ctx.fill();
+      ctx.fillStyle = tokens.muted;
+      ctx.font = `600 ${Math.round(size * 0.04)}px ${tokens.body}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Przeciągnij tu kafelki', c, c - size * 0.13);
+    } else {
+      const seg = (Math.PI * 2) / n;
+      const fontPx = Math.max(10, Math.min(size * 0.05, (seg * R * 0.62) * 0.7));
+      ctx.font = `700 ${Math.round(fontPx)}px ${tokens.body}`;
+      for (let i = 0; i < n; i++) {
+        const start = -Math.PI / 2 + rotation + i * seg;
+        const col = segColor(i, n);
+        ctx.beginPath();
+        ctx.moveTo(c, c);
+        ctx.arc(c, c, R, start, start + seg);
+        ctx.closePath();
+        ctx.fillStyle = col.fill;
+        ctx.fill();
+        if (n > 1) {
+          ctx.strokeStyle = tokens.rim;
+          ctx.lineWidth = Math.max(1, size * 0.004);
+          ctx.stroke();
+        }
+        ctx.save();
+        ctx.translate(c, c);
+        ctx.rotate(start + seg / 2);
+        ctx.fillStyle = col.text;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(fitText(state.entries[i].label, R * 0.68), R * 0.9, 0);
+        ctx.restore();
+      }
+    }
+
+    // hub
+    ctx.beginPath();
+    ctx.arc(c, c, R * 0.15, 0, Math.PI * 2);
+    ctx.fillStyle = tokens.rim;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(c, c, R * 0.09, 0, Math.PI * 2);
+    ctx.fillStyle = tokens.gold;
+    ctx.fill();
+  }
+
+  // ---------- spinning ----------
+  let spinning = false;
+  const TAU = Math.PI * 2;
+  const mod = (a, m) => ((a % m) + m) % m;
+  const indexAt = (rot, n) => Math.floor(mod(-rot, TAU) / (TAU / n)) % n;
+
+  function randomFloat() {
+    try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] / 4294967296; }
+    catch (e) { return Math.random(); }
+  }
+
+  function spin() {
+    const n = state.entries.length;
+    if (spinning || n < 2) return;
+    spinning = true;
+    spinBtn.disabled = true;
+    resultEl.classList.remove('is-win');
+    resultEl.replaceChildren(el('span', 'idle', 'Kręci się…'));
+
+    const winner = Math.floor(randomFloat() * n);
+    const seg = TAU / n;
+    const offset = 0.12 + randomFloat() * 0.76;          // land somewhere inside the segment, never on a line
+    const desired = mod(-(winner + offset) * seg, TAU);
+    const turns = reduceMotion ? 1 : 5 + Math.floor(randomFloat() * 3);
+    const from = rotation;
+    const to = from + turns * TAU + mod(desired - from, TAU);
+    const duration = reduceMotion ? 900 : 5200 + randomFloat() * 1200;
+    const t0 = performance.now();
+    let lastIdx = indexAt(from, n);
+    let lastBulb = 0;
+
+    function frame(now) {
+      const t = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - t, 4);
+      rotation = from + (to - from) * eased;
+      const idx = indexAt(rotation, n);
+      if (idx !== lastIdx && !reduceMotion) {
+        lastIdx = idx;
+        pointerEl.classList.remove('tick');
+        void pointerEl.offsetWidth;
+        pointerEl.classList.add('tick');
+      }
+      if (now - lastBulb > 120) { bulbPhase ^= 1; lastBulb = now; }
+      draw();
+      if (t < 1) requestAnimationFrame(frame);
+      else finish(winner);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function finish(winnerIdx) {
+    rotation = mod(rotation, TAU);
+    const n = state.entries.length;
+    const entry = state.entries[winnerIdx];
+    const color = segColor(winnerIdx, n).fill;
+
+    state.history.unshift({ label: entry.label, at: new Date().toISOString(), color });
+    state.history = state.history.slice(0, HISTORY_MAX);
+
+    const won = el('div', 'won');
+    won.append(el('small', null, 'Wylosowano'), el('strong', null, entry.label));
+    won.querySelector('strong').style.color = color;
+    resultEl.replaceChildren(won);
+    resultEl.classList.add('is-win');
+
+    const hot = entryList.querySelector(`[data-id="${entry.id}"]`);
+    if (hot) hot.classList.add('is-hot');
+
+    flashUntil = performance.now() + (reduceMotion ? 0 : 1600);
+    flashLoop();
+    renderHistory();
+    save();
+
+    const done = () => {
+      spinning = false;
+      if (state.removeAfter) {
+        const i = state.entries.findIndex(e => e.id === entry.id);
+        if (i > -1) state.entries.splice(i, 1);
+      }
+      changed();
+    };
+    if (state.removeAfter) setTimeout(done, reduceMotion ? 300 : 1600);
+    else done();
+  }
+
+  function flashLoop() {
+    draw();
+    if (performance.now() < flashUntil) requestAnimationFrame(flashLoop);
+    else draw();
+  }
+
+  // ---------- entries ----------
+  function addEntries(labels) {
+    if (spinning) return;
+    labels.forEach(label => state.entries.push({ id: newId(), label }));
+    changed();
+  }
+  function changed() {
+    renderEntries();
+    draw();
+    save();
+  }
+
+  // ---------- drag and drop (pointer-based: works with mouse, pen and touch) ----------
+  let drag = null;
+  const DRAG_THRESHOLD = 5;
+
+  function dropTargetAt(x, y) {
+    const hit = document.elementFromPoint(x, y);
+    return hit ? hit.closest('[data-drop]') : null;
+  }
+  function setOver(target) {
+    document.querySelectorAll('[data-drop].is-over').forEach(n => { if (n !== target) n.classList.remove('is-over'); });
+    if (target) target.classList.add('is-over');
+  }
+
+  groupsEl.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('[data-remove], [data-action], input, form')) return;
+    const tile = e.target.closest('.tile');
+    if (!tile) return;
+    drag = { tile, label: tile.dataset.label, x0: e.clientX, y0: e.clientY, active: false, ghost: null, id: e.pointerId };
+    tile.setPointerCapture(e.pointerId);
+  });
+
+  groupsEl.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if (!drag.active) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      drag.active = true;
+      const r = drag.tile.getBoundingClientRect();
+      drag.offX = drag.x0 - r.left;
+      drag.offY = drag.y0 - r.top;
+      const g = drag.tile.cloneNode(true);
+      g.classList.add('ghost');
+      g.querySelector('.x')?.remove();
+      g.style.width = r.width + 'px';
+      document.body.append(g);
+      drag.ghost = g;
+      drag.tile.classList.add('is-source');
+    }
+    drag.ghost.style.transform = `translate(${e.clientX - drag.offX}px, ${e.clientY - drag.offY}px) rotate(-3deg)`;
+    setOver(dropTargetAt(e.clientX, e.clientY));
+  });
+
+  function endDrag(e, cancelled) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag;
+    drag = null;
+    if (d.active) {
+      d.ghost.remove();
+      d.tile.classList.remove('is-source');
+      const target = cancelled ? null : dropTargetAt(e.clientX, e.clientY);
+      setOver(null);
+      if (target) addEntries([d.label]);
+      // swallow the click that follows a drag
+      d.tile.addEventListener('click', ev => ev.stopImmediatePropagation(), { once: true, capture: true });
+    }
+  }
+  groupsEl.addEventListener('pointerup', e => endDrag(e, false));
+  groupsEl.addEventListener('pointercancel', e => endDrag(e, true));
+
+  const groupOf = node => {
+    const wrap = node.closest('[data-group]');
+    return wrap ? state.groups.find(g => g.id === wrap.dataset.group) : null;
+  };
+
+  groupsEl.addEventListener('click', e => {
+    const g = groupOf(e.target);
+    if (!g) return;
+    const removeBtn = e.target.closest('[data-remove]');
+    if (removeBtn) {
+      g.items.splice(Number(removeBtn.dataset.remove), 1);
+      save();
+      editSet(g.id, 'set-add-');
+      return;
+    }
+    const actionEl = e.target.closest('[data-action]');
+    if (actionEl) {
+      const action = actionEl.dataset.action;
+      if (action === 'add-all') addEntries(g.items);
+      if (action === 'edit') editSet(g.id, 'set-name-');
+      if (action === 'done') editSet(null);
+      if (action === 'delete-set') {
+        if (!actionEl.dataset.armed) {
+          actionEl.dataset.armed = '1';
+          actionEl.textContent = 'Na pewno? Kliknij ponownie';
+          setTimeout(() => { if (actionEl.isConnected) { delete actionEl.dataset.armed; actionEl.textContent = 'Usuń zestaw'; } }, 3000);
+          return;
+        }
+        state.groups = state.groups.filter(x => x !== g);
+        save();
+        editSet(null);
+      }
+      return;
+    }
+    const tile = e.target.closest('.tile');
+    if (tile) addEntries([tile.dataset.label]);
+  });
+
+  groupsEl.addEventListener('input', e => {
+    if (e.target.dataset.role !== 'name') return;
+    const g = groupOf(e.target);
+    if (g) { g.name = e.target.value.slice(0, NAME_MAX); save(); }
+  });
+  groupsEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.dataset.role === 'name') {
+      e.preventDefault();
+      const g = groupOf(e.target);
+      if (g) $('set-add-' + g.id)?.focus();
+    }
+    if (e.key === 'Escape' && editing) editSet(null);
+  });
+  groupsEl.addEventListener('focusout', e => {
+    // an emptied name falls back to a default on leaving the field
+    if (e.target.dataset.role !== 'name') return;
+    const g = groupOf(e.target);
+    if (g && !g.name.trim()) { g.name = 'Zestaw bez nazwy'; e.target.value = g.name; save(); }
+  });
+
+  groupsEl.addEventListener('submit', e => {
+    e.preventDefault();
+    const g = groupOf(e.target);
+    const input = e.target.querySelector('input');
+    if (!g || !input) return;
+    const labels = splitLabels(input.value);
+    if (!labels.length) return;
+    labels.forEach(l => { if (!g.items.includes(l)) g.items.push(l); });
+    save();
+    editSet(g.id, 'set-add-');
+  });
+
+  // ---------- other controls ----------
+  $('new-set').addEventListener('click', () => {
+    const g = { id: newId(), name: 'Nowy zestaw', items: [] };
+    state.groups.push(g);
+    save();
+    editSet(g.id, 'set-name-');
+    $('set-name-' + g.id)?.scrollIntoView({ block: 'nearest' });
+  });
+
+  spinBtn.addEventListener('click', spin);
+  canvas.addEventListener('click', e => {
+    // the gold hub doubles as a spin button
+    const r = canvas.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    if (Math.hypot(dx, dy) < r.width * 0.08) spin();
+  });
+
+  $('shuffle').addEventListener('click', () => {
+    if (spinning) return;
+    for (let i = state.entries.length - 1; i > 0; i--) {
+      const j = Math.floor(randomFloat() * (i + 1));
+      [state.entries[i], state.entries[j]] = [state.entries[j], state.entries[i]];
+    }
+    changed();
+  });
+
+  function confirmButton(btn, label, action) {
+    let armed = null;
+    btn.addEventListener('click', () => {
+      if (armed) { clearTimeout(armed); armed = null; btn.textContent = label; action(); return; }
+      btn.textContent = 'Na pewno? Kliknij ponownie';
+      armed = setTimeout(() => { armed = null; btn.textContent = label; }, 3000);
+    });
+  }
+  confirmButton($('clear-entries'), 'Wyczyść koło', () => { if (!spinning) { state.entries = []; changed(); } });
+  confirmButton($('clear-history'), 'Wyczyść', () => { state.history = []; renderHistory(); save(); });
+  confirmButton($('reset-sets'), 'Przywróć domyślne zestawy', () => { state.groups = defaultGroups(); save(); editSet(null); });
+
+  removeAfterEl.addEventListener('change', () => { state.removeAfter = removeAfterEl.checked; save(); });
+
+  // re-read colors when the theme changes
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readTokens(); draw(); });
+  new MutationObserver(() => { readTokens(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  new ResizeObserver(resize).observe(wheelWrap);
+  document.fonts?.ready.then(() => { readTokens(); draw(); });
+
+  // ---------- boot ----------
+  load();
+  removeAfterEl.checked = state.removeAfter;
+  readTokens();
+  renderGroups();
+  renderEntries();
+  renderHistory();
+  resize();
+})();
+</script>
+
+</body></html>
